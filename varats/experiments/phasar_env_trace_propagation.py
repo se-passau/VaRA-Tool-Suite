@@ -9,34 +9,44 @@ instructions tainted by the environment variable of the cpp file.
 import json
 import typing as tp
 
+from plumbum import ProcessExecutionError
+
 import benchbuild.utils.actions as actions
 from benchbuild.settings import CFG
 from benchbuild.project import Project
-from benchbuild.utils.cmd import rm
+from benchbuild.utils.cmd import rm, echo, FileCheck
 from varats.experiments.phasar_env_analysis import PhasarEnvironmentTracing
 from varats.data.reports.taint_report import TaintPropagationReport as TPR
 from varats.data.reports.env_trace_report import EnvTraceReport as ENVR
 from varats.data.report import FileStatusExtension as FSE
+from varats.utils.experiment_util import (
+    exec_func_with_pe_error_handler, FunctionPEErrorWrapper,
+    PEErrorHandler)
 
 
-class ParseJSONToInstructions(actions.Step):  # type: ignore
+class ParseAndValidatePhasarOutput(actions.Step):  # type: ignore
     """
     Analyse a project with Phasar's IFDS that traces environment variables
     inside a project.
     """
 
-    NAME = "ParseJSONToInstructions"
-    DESCRIPTION = "Parses Phasar's JSON into only the tainted instructions."
+    NAME = "ParseAndValidatePhasarOutput"
+    DESCRIPTION = "Parses Phasar's JSON into only the tainted instructions."\
+        + "Also the parsed results get validated with LLVM FileCheck."
 
     RESULT_FOLDER_TEMPLATE = "{result_dir}/{project_dir}"
 
-    def __init__(self, project: Project):
-        super(ParseJSONToInstructions, self).__init__(
-            obj=project, action_fn=self.parse)
+    FC_FILE_SOURCE_DIR = "{project_builddir}/{project_src}/{project_name}"
+    EXPECTED_FC_FILE = "{binary_name}.txt"
 
-    def parse(self) -> actions.StepResult:
+    def __init__(self, project: Project):
+        super(ParseAndValidatePhasarOutput, self).__init__(
+            obj=project, action_fn=self.filecheck)
+
+    def filecheck(self) -> actions.StepResult:
         """
-        Parses Phasar's JSON into a file containing only tainted instructions.
+        Compare the generated results against the expected result.
+        First the result files are read, printed and piped into FileCheck.
         """
 
         if not self.obj:
@@ -48,7 +58,14 @@ class ParseJSONToInstructions(actions.Step):  # type: ignore
             result_dir=str(CFG["vara"]["outfile"]),
             project_dir=str(project.name))
 
-        prefix = "main::"
+        # The temporary directory the project is stored under
+        tmp_repo_dir = self.FC_FILE_SOURCE_DIR.format(
+            project_builddir=str(project.builddir),
+            project_src=str(project.SRC_FILE),
+            project_name=str(project.name))
+
+        prefix_to_remove = "main::"
+        timeout_duration = '3h'
 
         for binary_name in project.BIN_NAMES:
 
@@ -60,8 +77,22 @@ class ParseJSONToInstructions(actions.Step):  # type: ignore
                 project_uuid=str(project.run_uuid),
                 extension_type=FSE.Success)
 
+            # Define output file name of failed runs
+            error_file = "phasar-" + TPR.get_file_name(
+                project_name=str(project.name),
+                binary_name=binary_name,
+                project_version=str(project.version),
+                project_uuid=str(project.run_uuid),
+                extension_type=FSE.Failed,
+                file_ext=TPR.FILE_TYPE)
+
+            # The file name of the text file with the expected filecheck regex
+            # TODO file not found
+            expected_file = self.EXPECTED_FC_FILE.format(
+                binary_name=binary_name)
+
             # write new result into a taint propagation report
-            result_file = TPR.get_file_name(
+            result_file = "phasar-" + TPR.get_file_name(
                 project_name=str(project.name),
                 binary_name=binary_name,
                 project_version=str(project.version),
@@ -82,19 +113,39 @@ class ParseJSONToInstructions(actions.Step):  # type: ignore
                         if '@getenv' in fact[0]:
                             tainted_instructions.append(
                                 # remove 'main::' from the tainted instructions
-                                instruction[instruction.startswith(prefix)
-                                            and len(prefix):])
+                                instruction[
+                                    instruction.startswith(prefix_to_remove)
+                                    and len(prefix_to_remove):])
                             break
 
+            # remove the no longer needed json files
             rm("{res_folder}/{old_res_file}".format(
                 res_folder=result_folder,
                 old_res_file=old_result_file))
 
-            with open("{res_folder}/{res_file}".format(
+            # Validate the result with filecheck
+            array_string = ""
+            for inst in tainted_instructions:
+                array_string += inst + "\n"
+
+            file_check_cmd = FileCheck["{fc_dir}/{fc_exp_file}".format(
+                fc_dir=tmp_repo_dir, fc_exp_file=expected_file)]
+
+            cmd_chain = (echo[array_string] | file_check_cmd
+                         > "{res_folder}/{res_file}".format(
+                res_folder=result_folder,
+                res_file=result_file))
+
+            try:
+                exec_func_with_pe_error_handler(
+                    cmd_chain,
+                    PEErrorHandler(result_folder, error_file,
+                                   cmd_chain, timeout_duration))
+            # Remove the success file on error in the filecheck.
+            except ProcessExecutionError:
+                rm("{res_folder}/{res_file}".format(
                     res_folder=result_folder,
-                    res_file=result_file), 'w') as file:
-                for instruction in tainted_instructions:
-                    file.write("%s\n" % instruction)
+                    res_file=result_file))
 
 
 class PhasarEnvTracePropagation(PhasarEnvironmentTracing):  # type: ignore
@@ -107,7 +158,7 @@ class PhasarEnvTracePropagation(PhasarEnvironmentTracing):  # type: ignore
 
     NAME = "PhasarEnvTracePropagation"
 
-    REPORT_TYPE = ENVR
+    REPORT_TYPE = TPR
 
     def actions_for_project(self, project: Project) -> tp.List[actions.Step]:
         """
@@ -117,9 +168,9 @@ class PhasarEnvTracePropagation(PhasarEnvironmentTracing):  # type: ignore
         analysis_actions = super().actions_for_project(project)
 
         # remove the clean step from the other experiment
-        # del analysis_actions[-1]
+        del analysis_actions[-1]
 
-        analysis_actions.append(ParseJSONToInstructions(project))
+        analysis_actions.append(ParseAndValidatePhasarOutput(project))
         analysis_actions.append(actions.Clean(project))
 
         return analysis_actions
