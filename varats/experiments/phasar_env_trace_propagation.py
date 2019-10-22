@@ -36,7 +36,7 @@ class ParseAndValidatePhasarOutput(actions.Step):  # type: ignore
 
     RESULT_FOLDER_TEMPLATE = "{result_dir}/{project_dir}"
 
-    FC_FILE_SOURCE_DIR = "{project_builddir}/{project_src}/{project_name}"
+    FC_FILE_SOURCE_DIR = "{tmp_dir}/{project_src}/{project_name}"
     EXPECTED_FC_FILE = "{binary_name}.txt"
 
     def __init__(self, project: Project):
@@ -60,7 +60,7 @@ class ParseAndValidatePhasarOutput(actions.Step):  # type: ignore
 
         # The temporary directory the project is stored under
         tmp_repo_dir = self.FC_FILE_SOURCE_DIR.format(
-            project_builddir=str(project.builddir),
+            tmp_dir=str(CFG["tmp_dir"]),
             project_src=str(project.SRC_FILE),
             project_name=str(project.name))
 
@@ -87,7 +87,6 @@ class ParseAndValidatePhasarOutput(actions.Step):  # type: ignore
                 file_ext=TPR.FILE_TYPE)
 
             # The file name of the text file with the expected filecheck regex
-            # TODO file not found
             expected_file = self.EXPECTED_FC_FILE.format(
                 binary_name=binary_name)
 
@@ -123,7 +122,7 @@ class ParseAndValidatePhasarOutput(actions.Step):  # type: ignore
                 res_folder=result_folder,
                 old_res_file=old_result_file))
 
-            # Validate the result with filecheck
+            # validate the result with filecheck
             array_string = ""
             for inst in tainted_instructions:
                 array_string += inst + "\n"
@@ -141,7 +140,7 @@ class ParseAndValidatePhasarOutput(actions.Step):  # type: ignore
                     cmd_chain,
                     PEErrorHandler(result_folder, error_file,
                                    cmd_chain, timeout_duration))
-            # Remove the success file on error in the filecheck.
+            # remove the success file on error in the filecheck.
             except ProcessExecutionError:
                 rm("{res_folder}/{res_file}".format(
                     res_folder=result_folder,
