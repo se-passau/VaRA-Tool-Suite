@@ -42,10 +42,12 @@ class CompareTaintPropagation(Experiment):  # type: ignore
             << RunWLLVM() \
             << run.WithTimeout()
 
-        # TODO fix access to the imported methods and their calls
-        analysis_actions = VaRA.actions_for_project(project)
+        # call VaRA's action steps as a VaRAFileCheckTaintPropagation
+        analysis_actions = VaRA.actions_for_project(VaRA(), project)
         # remove the clean step from the other experiment
         del analysis_actions[-1]
-        analysis_actions.append(Phasar.actions_for_project(project))
+
+        # extend the action steps as a PhasarEnvTracePropagation
+        analysis_actions.extend(Phasar.actions_for_project(Phasar(), project))
 
         return analysis_actions
