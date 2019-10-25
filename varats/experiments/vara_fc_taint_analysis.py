@@ -105,7 +105,7 @@ class ParseAndValidateVaRAOutput(actions.Step):  # type: ignore
                 # each instruction still contains '\n' at the end
                 instructions: List[str] = file.readlines()
                 for inst in instructions:
-                    if '{getenv' in inst:
+                    if '{RetT_getenv' in inst:
                         tainted_instructions.append(inst)
 
             # remove the no longer needed llvm ir files
