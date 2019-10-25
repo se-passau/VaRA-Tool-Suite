@@ -64,7 +64,6 @@ class ParseAndValidatePhasarOutput(actions.Step):  # type: ignore
             project_src=str(project.SRC_FILE),
             project_name=str(project.name))
 
-        prefix_to_remove = "main::"
         timeout_duration = '3h'
 
         for binary_name in project.BIN_NAMES:
@@ -112,9 +111,7 @@ class ParseAndValidatePhasarOutput(actions.Step):  # type: ignore
                         if '@getenv' in fact[0]:
                             tainted_instructions.append(
                                 # remove 'main::' from the tainted instructions
-                                instruction[
-                                    instruction.startswith(prefix_to_remove)
-                                    and len(prefix_to_remove):])
+                                instruction.split("::", 1)[1])
                             break
 
             # remove the no longer needed json files
