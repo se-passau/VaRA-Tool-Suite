@@ -122,7 +122,7 @@ class ParseAndValidatePhasarOutput(actions.Step):  # type: ignore
             file_check_cmd = FileCheck["{fc_dir}/{fc_exp_file}".format(
                 fc_dir=tmp_repo_dir, fc_exp_file=expected_file)]
 
-            cmd_chain = (echo[array_string]  # | file_check_cmd
+            cmd_chain = (echo[array_string]  | file_check_cmd
                          > "{res_folder}/{res_file}".format(
                 res_folder=result_folder,
                 res_file=result_file))
