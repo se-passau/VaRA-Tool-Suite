@@ -14,7 +14,7 @@ from plumbum import ProcessExecutionError
 import benchbuild.utils.actions as actions
 from benchbuild.settings import CFG
 from benchbuild.project import Project
-from benchbuild.utils.cmd import rm, echo, FileCheck
+from benchbuild.utils.cmd import rm, cat, FileCheck
 from varats.experiments.vara_full_mtfa import VaRATaintPropagation
 from varats.data.reports.taint_report import TaintPropagationReport as TPR
 from varats.data.report import FileStatusExtension as FSE
@@ -25,12 +25,11 @@ from varats.utils.experiment_util import (
 
 class ParseAndValidateVaRAOutput(actions.Step):  # type: ignore
     """
-    Read the LLVM IR, store the tainted ones and pipe them into FileCheck.
+    Read the LLVM IR and pipe them into FileCheck.
     """
 
     NAME = "ParseAndValidateVaRAOutput"
-    DESCRIPTION = "Parses VaRA's LLVM IR into only the tainted instructions."\
-        + "Also the parsed results get validated with LLVM FileCheck."
+    DESCRIPTION = "Pipes VaRA's LLVM IR into the LLVM FileCheck."
 
     RESULT_FOLDER_TEMPLATE = "{result_dir}/{project_dir}"
 
@@ -96,32 +95,12 @@ class ParseAndValidateVaRAOutput(actions.Step):  # type: ignore
                 project_uuid=str(project.run_uuid),
                 extension_type=FSE.Success)
 
-            tainted_instructions = []
-
-            # parse the old result file
-            with open("{res_folder}/{old_res_file}".format(
-                    res_folder=result_folder,
-                    old_res_file=old_result_file)) as file:
-                # each instruction still contains '\n' at the end
-                instructions: List[str] = file.readlines()
-                for inst in instructions:
-                    if '{RetT_getenv' in inst:
-                        tainted_instructions.append(inst)
-
-            # remove the no longer needed llvm ir files
-            rm("{res_folder}/{old_res_file}".format(
-                res_folder=result_folder,
-                old_res_file=old_result_file))
-
-            # validate the result with filecheck
-            array_string = ""
-            for inst in tainted_instructions:
-                array_string.join(inst)
-
             file_check_cmd = FileCheck["{fc_dir}/{fc_exp_file}".format(
                 fc_dir=tmp_repo_dir, fc_exp_file=expected_file)]
 
-            cmd_chain = (echo[array_string] | file_check_cmd
+            cmd_chain = (cat["{res_folder}/{old_res_file}".format(
+                    res_folder=result_folder,
+                    old_res_file=old_result_file)] | file_check_cmd
                          > "{res_folder}/{res_file}".format(
                              res_folder=result_folder,
                              res_file=result_file))
