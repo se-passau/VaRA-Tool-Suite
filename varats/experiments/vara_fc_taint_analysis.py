@@ -14,7 +14,7 @@ from plumbum import ProcessExecutionError
 import benchbuild.utils.actions as actions
 from benchbuild.settings import CFG
 from benchbuild.project import Project
-from benchbuild.utils.cmd import rm, cat, FileCheck
+from benchbuild.utils.cmd import rm, echo, FileCheck
 from varats.experiments.vara_full_mtfa import VaRATaintPropagation
 from varats.data.reports.taint_report import TaintPropagationReport as TPR
 from varats.data.report import FileStatusExtension as FSE
@@ -64,6 +64,7 @@ class ParseAndValidateVaRAOutput(actions.Step):  # type: ignore
         timeout_duration = '3h'
 
         for binary_name in project.BIN_NAMES:
+            instructions: List[str] = []
 
             # get the file name of the JSON Output
             old_result_file = TPR.get_file_name(
@@ -73,6 +74,17 @@ class ParseAndValidateVaRAOutput(actions.Step):  # type: ignore
                 project_uuid=str(project.run_uuid),
                 extension_type=FSE.Success,
                 file_ext=".ll")
+
+            with open("{res_folder}/{old_res_file}".format(
+                    res_folder=result_folder,
+                    old_res_file=old_result_file)) as file:
+                # each instruction still contains '\n' at the end
+                instructions = file.readlines()
+
+            # remove the no longer needed llvm ir files
+            rm("{res_folder}/{old_res_file}".format(
+                res_folder=result_folder,
+                old_res_file=old_result_file))
 
             # Define output file name of failed runs
             error_file = "vara-" + TPR.get_file_name(
@@ -98,9 +110,7 @@ class ParseAndValidateVaRAOutput(actions.Step):  # type: ignore
             file_check_cmd = FileCheck["{fc_dir}/{fc_exp_file}".format(
                 fc_dir=tmp_repo_dir, fc_exp_file=expected_file)]
 
-            cmd_chain = (cat["{res_folder}/{old_res_file}".format(
-                    res_folder=result_folder,
-                    old_res_file=old_result_file)] | file_check_cmd
+            cmd_chain = (echo[instructions] | file_check_cmd
                          > "{res_folder}/{res_file}".format(
                              res_folder=result_folder,
                              res_file=result_file))

@@ -32,6 +32,9 @@ class TaintTests(prj.Project):  # type: ignore
         "coercedArgPassing.cpp",
         "coercedReturnValuePassing.cpp",
         "controlFlowDependency.cpp",
+        "forLoop.cpp",
+        "functionPointer1.cpp",
+        "functionPointer2.cpp",
         "operatorTaintPropagation.cpp",
         "pointerTaintPropagation1.cpp",
         "pointerTaintPropagation2.cpp",
@@ -40,6 +43,8 @@ class TaintTests(prj.Project):  # type: ignore
         "regularReturnValuePassing.cpp",
         "returnValueMapping.cpp",
         "switchFallthrough.cpp",
+        "throwException.cpp",
+        "unionBitSensitive.cpp",
         "unionTaintPropagation.cpp",
         "variableLengthArgForwarding.cpp",
         "variableLengthArgPassing.cpp"
