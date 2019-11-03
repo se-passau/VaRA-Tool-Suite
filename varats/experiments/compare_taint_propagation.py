@@ -24,7 +24,6 @@ class CompareTaintPropagation(Experiment):  # type: ignore
     """
 
     NAME = "CompareTaintPropagation"
-
     REPORT_TYPE = TPR
 
     def actions_for_project(self, project: Project) -> tp.List[actions.Step]:
