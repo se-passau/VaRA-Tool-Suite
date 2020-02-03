@@ -9,6 +9,7 @@ import tempfile
 
 import pygit2
 from plumbum import local
+from plumbum.commands.base import BoundCommand
 
 from benchbuild.project import ProjectRegistry, Project
 from benchbuild.settings import CFG as BB_CFG
@@ -32,6 +33,20 @@ def get_project_cls_by_name(project_name: str) -> Project:
             return ProjectRegistry.projects[proj]
 
     raise LookupError
+
+
+def create_git_project_wrapper(project_name: str) -> BoundCommand:
+    """
+    Creates a git-callable that has the -C flag set to the repo of the given
+    project, i.e., no cd to the project's repo is necessary.
+    
+    Args:
+        project_name: The project to create the wrapper for.
+
+    Returns:
+        A git-callable with the -C flag set to the given project's git repo.
+    """
+    return git["-C", get_local_project_git_path(project_name)]
 
 
 def get_local_project_git_path(project_name: str) -> Path:

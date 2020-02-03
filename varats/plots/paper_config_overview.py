@@ -17,7 +17,7 @@ from varats.data.reports.commit_report import CommitMap
 from varats.data.report import MetaReport
 from varats.data.reports.empty_report import EmptyReport
 from varats.plots.plot import Plot
-from varats.plots.plot_utils import check_required_args, find_missing_revisions
+from varats.plots.plot_utils import check_required_args, bisect_project
 import varats.paper.paper_config as PC
 from varats.utils.project_util import get_local_project_git
 
@@ -39,7 +39,6 @@ def _gen_overview_plot_for_project(**kwargs: tp.Any) -> pd.DataFrame:
         processed_revisions = list(
             dict.fromkeys(case_study.processed_revisions(result_file_type)))
 
-        # dict: revision: str -> success: bool
         for rev in case_study.revisions:
             time_id = cmap.time_id(rev)
             success = rev in processed_revisions
@@ -207,20 +206,14 @@ class PaperConfigOverviewPlot(Plot):
 
     def calc_missing_revisions(self, boundary_gradient: float) -> tp.Set[str]:
         revisions = _gen_overview_plot_for_project(**self.plot_kwargs)
-        revisions.sort_values(by=['commit_id'], inplace=True)
-        cmap: CommitMap = self.plot_kwargs['cmap']
+        project: str = self.plot_kwargs['project']
 
-        def head_cm_neighbours(lhs_cm: str, rhs_cm: str) -> bool:
-            return cmap.time_id(lhs_cm) + 1 == cmap.time_id(rhs_cm)
+        def should_insert_revision(lhs_cm: str,
+                                   rhs_cm: str) -> tp.Tuple[bool, float]:
+            return (revisions[revisions["commit_hash"] == lhs_cm]["status"]
+                   ).values.item() != (
+                       revisions[revisions["commit_hash"] == rhs_cm]["status"]
+                   ).values.item(), 1.0
 
-        def should_insert_revision(last_row: tp.Any,
-                                   row: tp.Any) -> tp.Tuple[bool, float]:
-            return last_row["status"] != row["status"], 1.0
-
-        def get_commit_hash(row: tp.Any) -> str:
-            return str(row["commit_hash"])
-
-        return find_missing_revisions(revisions.iterrows(),
-                                      Path(self.plot_kwargs['git_path']), cmap,
-                                      should_insert_revision, get_commit_hash,
-                                      head_cm_neighbours)
+        return bisect_project(set(revisions["commit_hash"]), project,
+                              should_insert_revision)

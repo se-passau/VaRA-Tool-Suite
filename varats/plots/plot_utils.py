@@ -6,7 +6,11 @@ import typing as tp
 import functools
 from pathlib import Path
 
+import pygit2
+
 from varats.data.reports.commit_report import CommitMap
+from varats.utils.project_util import (get_local_project_git,
+                                       create_git_project_wrapper)
 
 
 def __check_required_args_impl(required_args: tp.List[str],
@@ -83,4 +87,81 @@ def find_missing_revisions(
                         rev=new_rev))
                 new_revs.add(new_rev)
         last_row = row
+    return new_revs
+
+
+def bisect_project(
+        data: tp.Set[str], project: str,
+        should_insert_revision: tp.Callable[[str, str], tp.Tuple[bool, float]]
+) -> tp.Set[str]:
+    """
+    Perform a bisection step over the whole history of a project for a given
+    sample of evaluated revisions.
+    
+    Args:
+        data: The set of revisions used for bisection.
+        project: The project to bisect on.
+        should_insert_revision: A function that, given two revisions, determines
+                                whether bisection should be performed at that
+                                point.
+
+    Returns: A set of revisions that should be evaluated for the next
+             bisection step.
+    """
+
+    new_revs: tp.Set[str] = set()
+    repo = get_local_project_git(project)
+    git = create_git_project_wrapper(project)
+
+    def next_commits(head_commit: pygit2.Commit) -> tp.Set[pygit2.Commit]:
+        queue: tp.List[pygit2.Commit] = head_commit.parents
+        visited: tp.Set[pygit2.Commit] = set(head_commit.parents)
+        result: tp.Set[pygit2.Commit] = set()
+
+        while queue:
+            c = queue.pop()
+            if str(c.id) in data:
+                result.add(c)
+            else:
+                for p in c.parents:
+                    if p not in visited:
+                        queue.append(p)
+                        visited.add(p)
+
+        return result
+
+    to_process = list(next_commits(repo.revparse_single('HEAD')))
+    processed = set(to_process)
+    while to_process:
+        current_commit = to_process.pop()
+        next_set = next_commits(current_commit)
+
+        should_bisect = any([
+            should_insert_revision(str(commit.id), str(current_commit.id))[0]
+            for commit in next_set
+        ])
+
+        if should_bisect:
+            print(f"Bisecting at commit {current_commit.id}:")
+            good = set([
+                c for c in next_set if should_insert_revision(
+                    str(c.id), str(current_commit.id))[0] is True
+            ])
+
+            # returns the commit hash that git-bisect would return
+            # if current_commit was marked as `bad` and the commits in
+            # good were marked as `good`
+            new_rev = repo.get(
+                git("rev-list", "--bisect", f"{str(current_commit.id)}",
+                    *[f"^{str(g.id)}" for g in good]).strip())
+            if str(new_rev.id) not in data:
+                print(f"-> Adding {new_rev.id} as new revision to the " +
+                      f"sample set")
+                new_revs.add(str(new_rev.id))
+            else:
+                print("-> Bisection point already evaluated. Skipping.")
+        for n in next_set:
+            if n not in processed:
+                to_process.append(n)
+                processed.add(n)
     return new_revs
