@@ -42,7 +42,7 @@ from PyQt5.QtCore import Qt
 
 class VaRATSGui:
     """
-    Start VaRA-TS grafical user interface for graphs.
+    Start VaRA-TS graphical user interface for graphs.
     """
 
     def __init__(self) -> None:
@@ -280,7 +280,8 @@ def main_plot() -> None:
 
     extend_parser_with_plot_args(parser)
 
-    args = {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
+    args = {k: v for k, v in vars(
+        parser.parse_args()).items() if v is not None}
 
     # Setup default result folder
     if 'result_output' not in args:
@@ -316,7 +317,8 @@ def main_plot() -> None:
                 args['project'], args.get('cmap', None))
         if 'cs_path' in args:
             case_study_path = Path(args['cs_path'])
-            args['plot_case_study'] = load_case_study_from_file(case_study_path)
+            args['plot_case_study'] = load_case_study_from_file(
+                case_study_path)
         else:
             args['plot_case_study'] = None
 
@@ -352,7 +354,7 @@ def main_gen_benchbuild_config() -> None:
 
     if CFG["benchbuild_root"].value is None:
         CFG["benchbuild_root"] = os.path.dirname(str(CFG["config_file"]))\
-                                                 + "/benchbuild"
+            + "/benchbuild"
         print("Setting BB path to: ", CFG["benchbuild_root"])
         save_config()
 
@@ -488,8 +490,7 @@ def main_casestudy() -> None:
             "--revs-year-sep",
             action="store_true",
             default=False,
-            help=
-            "Separate the revisions in different stages per year (when using \'--revs-per-year\')."
+            help="Separate the revisions in different stages per year (when using \'--revs-per-year\')."
         )
         sub_parser.add_argument("--num-rev",
                                 type=int,
@@ -558,7 +559,28 @@ def main_casestudy() -> None:
         nargs="*",
         default=[])
 
-    args = {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
+    view_parser = sub_parsers.add_parser(
+        'view', help="View a file of one revision for the current case study")
+
+    view_parser.add_argument(
+        "report_name",
+        help=("Provide a report name to "
+              "select which files are considered you want to view"),
+        choices=MetaReport.REPORT_TYPES.keys(),
+        type=str,
+        default=".*")
+
+    view_parser.add_argument(
+        "commit_hash",
+        help=("Provide a commit hash to "
+              "select which revisions are shown"),
+        # TODO get a list of commits per report
+        choices=[1, 2, 3, 4],
+        type=str,
+        default=".*")
+
+    args = {k: v for k, v in vars(
+        parser.parse_args()).items() if v is not None}
 
     if 'subcommand' not in args:
         parser.print_help()
