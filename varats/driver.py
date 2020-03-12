@@ -7,6 +7,7 @@ import os
 import sys
 import argparse
 import typing as tp
+import subprocess
 from pathlib import Path
 from argparse_utils import enum_action
 
@@ -35,6 +36,7 @@ from varats.paper.case_study import (SamplingMethod, ExtenderStrategy,
 import varats.paper.paper_config_manager as PCM
 from varats.paper.paper_config import get_paper_config
 from varats.data.report import MetaReport
+from varats.data.revisions import get_processed_revisions
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import Qt
@@ -572,12 +574,11 @@ def main_casestudy() -> None:
 
     view_parser.add_argument(
         "commit_hash",
-        help=("Provide a commit hash to "
-              "select which revisions are shown"),
-        # TODO get a list of commits per report
-        choices=[1, 2, 3, 4],
+        help=("Provide a commit hash to select which revisions are shown"),
+        # TODO get a list of commits per report, problem depends on report
+        # choices=get_processed_revisions(),
         type=str,
-        default=".*")
+        default="*")
 
     args = {k: v for k, v in vars(
         parser.parse_args()).items() if v is not None}
@@ -601,6 +602,16 @@ def main_casestudy() -> None:
                                         args['filter_regex'], args['short'],
                                         args['sorted'], args['list_revs'],
                                         args['ws'], args['legend'])
+
+    elif args['subcommand'] == 'view':
+        report_name = args['report_name']
+        commit_hash = args['commit_hash']
+        file_name = 'results/test.txt'
+        # TODO combine file name regex and get list of matches
+        # TODO get choice from user
+        
+        editor = os.getenv('EDITOR', 'vi')
+        subprocess.call(f"{editor} {file_name}", shell=True) #TODO replace with plumbum call
 
     elif args['subcommand'] == 'gen' or args['subcommand'] == 'ext':
         if "project" not in args and "git_path" not in args:

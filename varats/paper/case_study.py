@@ -329,7 +329,7 @@ class CaseStudy():
     @property
     def num_stages(self) -> int:
         """
-        Get nummer of stages.
+        Get number of stages.
         """
         return len(self.__stages)
 
