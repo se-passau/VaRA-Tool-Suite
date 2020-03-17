@@ -62,7 +62,7 @@ class Plot(metaclass=PlotRegistry):
         Access the kwargs passed to the initial plot.
 
         Test:
-        >>> p = Plot('test', **{'foo': 'bar', 'baz': 'bazzer'})
+        >>> p = Plot('test', foo='bar', baz='bazzer')
         >>> p.plot_kwargs['foo']
         'bar'
         >>> p.plot_kwargs['baz']
@@ -86,11 +86,21 @@ class Plot(metaclass=PlotRegistry):
     def show(self) -> None:
         """Show the current plot"""
 
-    def save(self, filetype: str = 'svg') -> None:
-        """Save the current plot to a file"""
+    def save(self, path: tp.Optional[Path] = None,
+             filetype: str = 'svg') -> None:
+        """
+        Save the current plot to a file.
+
+        Args:
+            path: The path where the file is stored (excluding the file name).
+            filetype: The file type of the plot.
+        """
         self.plot(False)
 
-        plot_dir = Path(self.plot_kwargs["plot_dir"])
+        if path is None:
+            plot_dir = Path(self.plot_kwargs["plot_dir"])
+        else:
+            plot_dir = path
         project_name = self.plot_kwargs["project"]
 
         plt.savefig(plot_dir /

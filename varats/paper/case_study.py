@@ -1,6 +1,6 @@
 """
-A case study to pin down project settings and the exact set of revisions that
-should be analysed.
+A case study is used to pin down the exact set of revisions that
+should be analysed for a project.
 """
 import abc
 import typing as tp
@@ -8,11 +8,8 @@ from collections import defaultdict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-import errno
-import os
 import random
 
-import yaml
 from benchbuild.project import Project
 from scipy.stats import halfnorm
 import numpy as np
@@ -21,11 +18,13 @@ import pygit2
 from varats.plots.plots import PlotRegistry
 from varats.utils.project_util import get_project_cls_by_name
 from varats.data.revisions import (get_processed_revisions,
-                                   get_failed_revisions, get_tagged_revisions)
+                                   get_failed_revisions, get_tagged_revisions,
+                                   get_tagged_revision)
 from varats.plots.plot_utils import check_required_args
 from varats.data.version_header import VersionHeader
 from varats.data.reports.commit_report import CommitMap
 from varats.data.report import MetaReport, FileStatusExtension
+from varats.utils.yaml_util import store_as_yaml, load_yaml
 
 
 class ExtenderStrategy(Enum):
@@ -52,6 +51,10 @@ class SamplingMethod(Enum):
     def gen_distribution_function(self) -> tp.Callable[[int], np.ndarray]:
         """
         Generate a distribution function for the specified sampling method.
+
+        Returns:
+            a callable that allows the caller to draw ``n`` numbers
+            according to the selected distribution
         """
         if self == SamplingMethod.uniform:
 
@@ -234,6 +237,13 @@ class CSStage():
     def has_revision(self, revision: str) -> bool:
         """
         Check if a revision is part of this case study.
+
+        Args:
+            revision: project revision to check
+
+        Returns:
+            ``True``, in case the revision is part of the case study,
+            ``False`` otherwise.
         """
         for cs_revision in self.__revisions:
             if cs_revision.commit_hash.startswith(revision):
@@ -244,25 +254,31 @@ class CSStage():
     def add_revision(self, revision: str, commit_id: int) -> None:
         """
         Add a new revision to this stage.
+
+        Args:
+            revision: to add
+            commit_id: unique ID for ordering of commits
         """
         if not self.has_revision(revision):
             self.__revisions.append(HashIDTuple(revision, commit_id))
 
     def sort(self, reverse: bool = True) -> None:
         """
-        Sort revisions by commit id.
+        Sort the revisions of the case study by commit ID inplace.
         """
         self.__revisions.sort(key=lambda x: x.commit_id, reverse=reverse)
 
     def get_dict(
-            self
+        self
     ) -> tp.Dict[str, tp.Union[str, tp.List[tp.Dict[str, tp.Union[str, int]]]]]:
         """
         Get a dict representation of this stage.
         """
-        stage_dict: tp.Dict[
-            str, tp.Union[str, tp.List[tp.Dict[str, tp.
-                                               Union[str, int]]]]] = dict()
+        stage_dict: tp.Dict[str,
+                            tp.Union[str,
+                                     tp.List[tp.Dict[str,
+                                                     tp.Union[str,
+                                                              int]]]]] = dict()
         if self.name is not None:
             stage_dict['name'] = self.name
         if self.extender_strategy is not None:
@@ -278,7 +294,7 @@ class CSStage():
 
 class CaseStudy():
     """
-    A case study persists a set of configuration values for a project to allow
+    A case study persists a set of revisions of a project to allow
     easy reevaluation.
 
     Stored values:
@@ -305,7 +321,8 @@ class CaseStudy():
     @property
     def version(self) -> int:
         """
-        Version ID for this case study.
+        Version ID for this case study. The version differentiates case studies
+        of the same project.
         """
         return self.__version
 
@@ -324,7 +341,7 @@ class CaseStudy():
         Get a list with all stages.
         """
         # Return new list to forbid modification of the case-study
-        return [stage for stage in self.__stages]
+        return list(self.__stages)
 
     @property
     def num_stages(self) -> int:
@@ -336,7 +353,14 @@ class CaseStudy():
     def get_stage_by_name(self, stage_name: str) -> tp.Optional[CSStage]:
         """
         Get a stage by its name.
-        Since multiple stages can have the same name, the first matching stage is returned.
+        Since multiple stages can have the same name, the first matching stage
+        is returned.
+
+        Args:
+            stage_name: name of the stage to lookup
+
+        Returns:
+            the stage, corresponding with the 'stage_name', or ``None``
         """
         for stage in self.__stages:
             if stage.name == stage_name:
@@ -347,7 +371,14 @@ class CaseStudy():
     def get_stage_index_by_name(self, stage_name: str) -> tp.Optional[int]:
         """
         Get a stage's index by its name.
-        Since multiple stages can have the same name, the first matching stage is returned.
+        Since multiple stages can have the same name, the first matching stage
+        is returned.
+
+        Args:
+            stage_name: name of the stage to lookup
+
+        Returns:
+            the stage index, corresponding with the 'stage_name', or ``None``
         """
         for i in range(len(self.__stages)):
             if self.__stages[i].name == stage_name:
@@ -358,6 +389,10 @@ class CaseStudy():
     def has_revision(self, revision: str) -> bool:
         """
         Check if a revision is part of this case study.
+
+        Returns:
+            ``True``, if the revision was found in one of the stages,
+            ``False`` otherwise
         """
         for stage in self.__stages:
             if stage.has_revision(revision):
@@ -367,7 +402,11 @@ class CaseStudy():
 
     def has_revision_in_stage(self, revision: str, num_stage: int) -> bool:
         """
-        Check if a revision of a specific stage.
+        Checks if a revision is in a specific stage.
+
+        Returns:
+            ``True``, if the revision was found in the specified stage,
+            ``False`` otherwise
         """
         if self.num_stages <= num_stage:
             return False
@@ -377,6 +416,10 @@ class CaseStudy():
         """
         Shift a stage in the case-studie's stage list by an offset.
         Beware that shifts to the left (offset<0) will destroy stages.
+
+        Args:
+            from_index: index of the first stage to shift
+            offset: amount to stages should be shifted
         """
         if not (0 <= from_index < len(self.__stages)):
             raise AssertionError("from_index out of bounds")
@@ -394,8 +437,12 @@ class CaseStudy():
 
     def insert_empty_stage(self, pos: int) -> CSStage:
         """
-        Insert a new stage at the given index, shifting the list elements to the right.
+        Insert a new stage at the given index, shifting the list elements
+        to the right.
         The newly created stage is returned.
+
+        Args:
+            pos: index position to insert an empty stage
         """
         new_stage = CSStage()
         self.__stages.insert(pos, new_stage)
@@ -408,6 +455,12 @@ class CaseStudy():
                          sort_revs: bool = True) -> None:
         """
         Add a revision to this case study.
+
+        Args:
+            revision: to add
+            commit_id: unique ID for ordering of commits
+            stage_num: index number of the stage to add the revision to
+            sort_revs: if True, the modified stage will be sorted afterwards
         """
         # Create missing stages
         while self.num_stages <= stage_num:
@@ -435,7 +488,8 @@ class CaseStudy():
             revisions: List of tuples with (commit_hash, id) to be inserted
             stage_num: The stage to insert the revisions
             sort_revs: True if the stage should be kept sorted
-            extender_strategy: The extender strategy used to acquire the revisions
+            extender_strategy: The extender strategy used to acquire the
+                               revisions
             sampling_method: The sampling method used to acquire the revisions
         """
         for revision in revisions:
@@ -481,6 +535,9 @@ class CaseStudy():
         """
         Generate a case study specific revision filter that only allows
         revision that are part of the case study.
+
+        Returns:
+            a callable filter function
         """
 
         def revision_filter(revision: str) -> bool:
@@ -490,7 +547,10 @@ class CaseStudy():
 
     def processed_revisions(self, result_file_type: MetaReport) -> tp.List[str]:
         """
-        Calculate how many revisions were processed.
+        Computes all revisions of this case study that have been processed.
+
+        Returns:
+            a list of processed revisions
         """
         total_processed_revisions = set(
             get_processed_revisions(self.project_name, result_file_type))
@@ -502,7 +562,10 @@ class CaseStudy():
 
     def failed_revisions(self, result_file_type: MetaReport) -> tp.List[str]:
         """
-        Calculate which revisions failed.
+        Computes all revisions of this case study that have failed.
+
+        Returns:
+            a list of failed revisions
         """
         total_failed_revisions = set(
             get_failed_revisions(self.project_name, result_file_type))
@@ -511,18 +574,23 @@ class CaseStudy():
             rev for rev in self.revisions if rev[:10] in total_failed_revisions
         ]
 
-    def get_revisions_status(self,
-                             result_file_type: MetaReport,
-                             stage_num: int = -1
-                            ) -> tp.List[tp.Tuple[str, FileStatusExtension]]:
+    def get_revisions_status(
+        self,
+        result_file_type: MetaReport,
+        stage_num: int = -1,
+        tag_blocked: bool = True
+    ) -> tp.List[tp.Tuple[str, FileStatusExtension]]:
         """
-        Get status of all revisions.
+        Computes the file status for all revisions in this case study.
+
+        Returns:
+            a list of (revision, status) tuples
         """
         tagged_revisions = get_tagged_revisions(self.project_name,
-                                                result_file_type)
+                                                result_file_type, tag_blocked)
 
         def filtered_tagged_revs(
-                rev_provider: tp.Iterable[str]
+            rev_provider: tp.Iterable[str]
         ) -> tp.List[tp.Tuple[str, FileStatusExtension]]:
             filtered_revisions = []
             for rev in rev_provider:
@@ -546,9 +614,27 @@ class CaseStudy():
 
         return []
 
-    def get_dict(self) -> tp.Dict[str, tp.Union[str, int, tp.List[
-            tp.Dict[str, tp.Union[str, tp.List[tp.Dict[str, tp.
-                                                       Union[str, int]]]]]]]]:
+    def get_revision_status(
+            self,
+            revision: str,
+            result_file_type: MetaReport,
+    ) -> FileStatusExtension:
+        """
+        Computes the file status for the given revision in this case study.
+
+        Returns:
+            a list of (revision, status) tuples
+        """
+        if not self.has_revision(revision):
+            raise ValueError(f"Case study has no revision {revision}")
+
+        return get_tagged_revision(revision, self.project_name,
+                                   result_file_type)
+
+    def get_dict(
+        self
+    ) -> tp.Dict[str, tp.Union[str, int, tp.List[tp.Dict[str, tp.Union[
+            str, tp.List[tp.Dict[str, tp.Union[str, int]]]]]]]]:
         """
         Get a dict representation of this case study.
         """
@@ -559,41 +645,39 @@ class CaseStudy():
 
 def load_case_study_from_file(file_path: Path) -> CaseStudy:
     """
-    Load a case-study from a file.
+    Load a case study from a file.
+
+    Args:
+        file_path: path to the case study file
     """
-    if file_path.exists():
-        with open(file_path, "r") as cs_file:
-            documents = yaml.load_all(cs_file, Loader=yaml.CLoader)
-            version_header = VersionHeader(next(documents))
-            version_header.raise_if_not_type("CaseStudy")
-            version_header.raise_if_version_is_less_than(1)
+    documents = load_yaml(file_path)
+    version_header = VersionHeader(next(documents))
+    version_header.raise_if_not_type("CaseStudy")
+    version_header.raise_if_version_is_less_than(1)
 
-            raw_case_study = next(documents)
-            stages: tp.List[CSStage] = []
-            for raw_stage in raw_case_study['stages']:
-                hash_id_tuples: tp.List[HashIDTuple] = []
-                for raw_hash_id_tuple in raw_stage['revisions']:
-                    hash_id_tuples.append(
-                        HashIDTuple(raw_hash_id_tuple['commit_hash'],
-                                    raw_hash_id_tuple['commit_id']))
-                extender_strategy = raw_stage.get('extender_strategy') or None
-                sampling_method = raw_stage.get('sampling_method') or None
-                release_type = raw_stage.get('release_type') or None
-                stages.append(
-                    CSStage(
-                        raw_stage.get('name') or None,
-                        ExtenderStrategy[extender_strategy]
-                        if extender_strategy is not None else None,
-                        SamplingMethod[sampling_method]
-                        if sampling_method is not None else None,
-                        ReleaseType[release_type]
-                        if release_type is not None else None, hash_id_tuples))
+    raw_case_study = next(documents)
+    stages: tp.List[CSStage] = []
+    for raw_stage in raw_case_study['stages']:
+        hash_id_tuples: tp.List[HashIDTuple] = []
+        for raw_hash_id_tuple in raw_stage['revisions']:
+            hash_id_tuples.append(
+                HashIDTuple(raw_hash_id_tuple['commit_hash'],
+                            raw_hash_id_tuple['commit_id']))
+        extender_strategy = raw_stage.get('extender_strategy') or None
+        sampling_method = raw_stage.get('sampling_method') or None
+        release_type = raw_stage.get('release_type') or None
+        stages.append(
+            CSStage(
+                raw_stage.get('name') or None,
+                ExtenderStrategy[extender_strategy]
+                if extender_strategy is not None else None,
+                SamplingMethod[sampling_method]
+                if sampling_method is not None else None,
+                ReleaseType[release_type] if release_type is not None else None,
+                hash_id_tuples))
 
-            return CaseStudy(raw_case_study['project_name'],
-                             raw_case_study['version'], stages)
-
-    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT),
-                            str(file_path))
+    return CaseStudy(raw_case_study['project_name'], raw_case_study['version'],
+                     stages)
 
 
 def store_case_study(case_study: CaseStudy, case_study_location: Path) -> None:
@@ -601,45 +685,36 @@ def store_case_study(case_study: CaseStudy, case_study_location: Path) -> None:
     Store case study to file in the specified paper_config.
 
     Args:
+        case_study: the case study to store
         case_study_location: can be either a path to a paper_config
-                                or a direct path to a `.case_study` file
+                             or a direct path to a `.case_study` file
     """
-    if case_study_location.suffix == '.case_study':
-        __store_case_study_to_file(case_study, case_study_location)
-    else:
-        __store_case_study_to_paper_config(case_study, case_study_location)
+    if case_study_location.suffix != '.case_study':
+        file_name = "{project_name}_{version}.case_study".format(
+            project_name=case_study.project_name, version=case_study.version)
+        case_study_location /= file_name
 
-
-def __store_case_study_to_paper_config(case_study: CaseStudy,
-                                       paper_config_path: Path) -> None:
-    """
-    Store case study to file in the specified paper_config.
-    """
-    file_name = "{project_name}_{version}.case_study".format(
-        project_name=case_study.project_name, version=case_study.version)
-    __store_case_study_to_file(case_study, paper_config_path / file_name)
+    __store_case_study_to_file(case_study, case_study_location)
 
 
 def __store_case_study_to_file(case_study: CaseStudy, file_path: Path) -> None:
     """
     Store case study to file.
     """
-    with open(file_path, "w") as cs_file:
-        version_header: VersionHeader = \
-            VersionHeader.from_version_number('CaseStudy', 1)
-
-        cs_file.write(
-            yaml.dump_all([version_header.get_dict(),
-                           case_study.get_dict()]))
+    store_as_yaml(
+        file_path,
+        [VersionHeader.from_version_number('CaseStudy', 1), case_study])
 
 
-def get_newest_result_files_for_case_study(case_study: CaseStudy,
-                                           result_dir: Path,
-                                           report_type: MetaReport
-                                          ) -> tp.List[Path]:
+def get_newest_result_files_for_case_study(
+        case_study: CaseStudy, result_dir: Path,
+        report_type: MetaReport) -> tp.List[Path]:
     """
     Return all result files of a specific type that belong to a given case
     study. For revision with multiple files, the newest file will be selected.
+
+    Returns:
+        list of result file paths
     """
     files_to_store: tp.Dict[str, Path] = dict()
 
@@ -660,19 +735,27 @@ def get_newest_result_files_for_case_study(case_study: CaseStudy,
                             opt_res_file.stat().st_mtime):
                         files_to_store[commit_hash] = opt_res_file
 
-    return [x for x in files_to_store.values()]
+    return list(files_to_store.values())
 
 
-def get_case_study_file_name_filter(case_study: CaseStudy
-                                   ) -> tp.Callable[[str], bool]:
-    """Generate a file_name filter for a case_study"""
+def get_case_study_file_name_filter(
+        case_study: CaseStudy) -> tp.Callable[[str], bool]:
+    """
+    Generate a case study specific file-name filter function that allows the
+    user to check if a file name is related to this case study.
+
+    Returns:
+        a filter function that returns ``True`` in cases where a revision of
+        file belongs to this case study
+    """
 
     def cs_filter(file_name: str) -> bool:
         """
         Filter files that are not in the case study.
 
-        Returns True if a case_study is set and the commit_hash of the file
-        is not part of this case_study, otherwise, False.
+        Returns:
+            ``True`` if a case_study is set and the commit_hash of the file
+            is not part of this case_study, otherwise, ``False``.
         """
         if case_study is None:
             return False
@@ -698,6 +781,16 @@ def generate_case_study(sampling_method: SamplingMethod, cmap: CommitMap,
     This function will draw `num_samples` revisions from the history of the
     given project and persists the selected set into a case study for
     evaluation.
+
+    Args:
+        sampling_method: to use for revision sampling
+        cmap: commit map to map revisions to unique IDs
+        case_study_version: version to set for the case study
+        project_name: name of the project so sample from
+        kwargs: additional args that should be passed on to the strategy
+
+    Returns:
+        a new case study
     """
     case_study = CaseStudy(project_name, case_study_version)
 
@@ -722,7 +815,13 @@ def generate_case_study(sampling_method: SamplingMethod, cmap: CommitMap,
 def extend_case_study(case_study: CaseStudy, cmap: CommitMap,
                       ext_strategy: ExtenderStrategy, **kwargs: tp.Any) -> None:
     """
-    Extend a case study with new revisions.
+    Extend a case study inplace with new revisions according to the specified
+    extender strategy.
+
+    Args:
+        case_study: to extend
+        cmap: commit map to map revisions to unique IDs
+        ext_strategy: determines how the case study should be extended
     """
 
     if ext_strategy is ExtenderStrategy.simple_add:
@@ -741,7 +840,12 @@ def extend_case_study(case_study: CaseStudy, cmap: CommitMap,
 def extend_with_extra_revs(case_study: CaseStudy, cmap: CommitMap,
                            **kwargs: tp.Any) -> None:
     """
-    Extend a case_study with extra revisions.
+    Extend a case_study with extra revisions, specified by the caller
+    with kwargs['extra_revs'].
+
+    Args:
+        case_study: to extend
+        cmap: commit map to map revisions to unique IDs
     """
     extra_revs = kwargs['extra_revs']
     merge_stage = kwargs['merge_stage']
@@ -760,7 +864,12 @@ def extend_with_extra_revs(case_study: CaseStudy, cmap: CommitMap,
 def extend_with_revs_per_year(case_study: CaseStudy, cmap: CommitMap,
                               **kwargs: tp.Any) -> None:
     """
-    Extend a case_study with n revisions per year.
+    Extend a case_study with ``n`` revisions per year, specifed by the caller
+    with kwargs['revs_per_year'].
+
+    Args:
+        case_study: to extend
+        cmap: commit map to map revisions to unique IDs
     """
 
     def parse_int_string(string: tp.Optional[str]) -> tp.Optional[int]:
@@ -794,8 +903,7 @@ def extend_with_revs_per_year(case_study: CaseStudy, cmap: CommitMap,
         case_study.name_stage(num_stages, str(year))
         return num_stages
 
-    repo_path = pygit2.discover_repository(kwargs['git_path'])
-    repo = pygit2.Repository(repo_path)
+    repo = pygit2.Repository(pygit2.discover_repository(kwargs['git_path']))
     last_commit = repo[repo.head.target]
     revs_year_sep = kwargs['revs_year_sep']
 
@@ -830,13 +938,19 @@ def extend_with_revs_per_year(case_study: CaseStudy, cmap: CommitMap,
 def extend_with_distrib_sampling(case_study: CaseStudy, cmap: CommitMap,
                                  **kwargs: tp.Any) -> None:
     """
-    Extend a case study by sampling `num_rev` new revisions.
+    Extend a case study by sampling 'num_rev' new revisions, according to
+    distribution specified with kwargs['distribution'].
+
+    Args:
+        case_study: to extend
+        cmap: commit map to map revisions to unique IDs
     """
     # Needs to be sorted so the propability distribution over the length
     # of the list is the same as the distribution over the commits age history
     revision_list = [
-        rev_item for rev_item in sorted([x for x in cmap.mapping_items()],
-                                        key=lambda x: x[1]) if
+        rev_item
+        for rev_item in sorted(list(cmap.mapping_items()), key=lambda x: x[1])
+        if
         not case_study.has_revision_in_stage(rev_item[0], kwargs['merge_stage'])
     ]
 
@@ -849,9 +963,10 @@ def extend_with_distrib_sampling(case_study: CaseStudy, cmap: CommitMap,
                                  sampling_method=kwargs['distribution'])
 
 
-def sample_n(distrib_func: tp.Callable[[int], np.ndarray], num_samples: int,
-             list_to_sample: tp.List[tp.Tuple[str, int]]
-            ) -> tp.List[tp.Tuple[str, int]]:
+def sample_n(
+    distrib_func: tp.Callable[[int], np.ndarray], num_samples: int,
+    list_to_sample: tp.List[tp.Tuple[str, int]]
+) -> tp.List[tp.Tuple[str, int]]:
     """
     Return a list of n unique samples.
     If the list to sample is smaller than the number of samples the full list
@@ -887,6 +1002,10 @@ def extend_with_smooth_revs(case_study: CaseStudy, cmap: CommitMap,
     Extend a case study with extra revisions that could smooth plot curves.
     This can remove steep gradients that result from missing certain revisions
     when sampling.
+
+    Args:
+        case_study: to extend
+        cmap: commit map to map revisions to unique IDs
     """
     plot_type = PlotRegistry.get_class_for_plot_type(kwargs['plot_type'])
 
@@ -919,6 +1038,10 @@ def extend_with_release_revs(case_study: CaseStudy, cmap: CommitMap,
     """
     Extend a case study with revisions marked as a release.
     This extender relies on the project to determine appropriate revisions.
+
+    Args:
+        case_study: to extend
+        cmap: commit map to map revisions to unique IDs
     """
     project: Project = get_project_cls_by_name(kwargs['project'])
     release_revisions: tp.List[str] = project.get_release_revisions(

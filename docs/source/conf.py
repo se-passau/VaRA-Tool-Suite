@@ -14,6 +14,8 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+# pylint: skip-file
+
 # -- Project information -----------------------------------------------------
 from pkg_resources import DistributionNotFound, get_distribution
 
@@ -22,7 +24,7 @@ try:
 except DistributionNotFound:
     pass
 
-project = 'VaRA-Tool-Suite'
+project = 'VaRA'
 copyright = '2020, Florian Sattler'
 author = 'Florian Sattler'
 
@@ -35,8 +37,12 @@ release = __version__
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.napoleon', 'sphinx.ext.autodoc', 'sphinx.ext.todo',
-    'sphinx.ext.viewcode', 'sphinx.ext.autosectionlabel'
+    'sphinx.ext.napoleon',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.todo',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.autosectionlabel',
+    'sphinxcontrib.programoutput',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -66,3 +72,10 @@ pygments_style = 'sphinx'
 autodoc_member_order = "bysource"
 add_function_parentheses = True
 add_module_names = True
+
+# -- Prevent import warnings -------------------------------------------------
+
+import logging
+import benchbuild.utils
+
+benchbuild.utils.LOG.setLevel(logging.ERROR)

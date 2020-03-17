@@ -19,7 +19,7 @@ from PyQt5.QtCore import (QRunnable, QThreadPool, pyqtSlot, pyqtSignal, QObject,
                           QProcess)
 
 from plumbum import local, TF, RETCODE
-from plumbum.cmd import git, mkdir, ln, ninja, grep, cmake
+from plumbum.cmd import git, mkdir, ln, grep, cmake
 
 from varats.settings import save_config, CFG
 from varats.utils.exceptions import ProcessTerminatedError
@@ -160,8 +160,8 @@ class LLVMProjects(Enum):
         return not self.is_vara_project()
 
 
-def convert_to_llvmprojects_enum(projects_names: tp.List[str]
-                                ) -> tp.List[LLVMProjects]:
+def convert_to_llvmprojects_enum(
+        projects_names: tp.List[str]) -> tp.List[LLVMProjects]:
     """
     Converts a list of strings into a list of LLVMProject.
 
@@ -189,7 +189,7 @@ def generate_full_list_of_llvmprojects() -> tp.List[LLVMProjects]:
     """
     Generates a list of all LLVM projects.
     """
-    return [project_enum for project_enum in LLVMProjects]
+    return list(LLVMProjects)
 
 
 class VaRAProjectsIter():
@@ -215,7 +215,7 @@ def generate_vara_list_of_llvmprojects() -> tp.List[LLVMProjects]:
     """
     Generates a list of all VaRA llvm projects.
     """
-    return [project_enum for project_enum in VaRAProjectsIter()]
+    return list(VaRAProjectsIter())
 
 
 class VaRAExtraProjectsIter():
@@ -236,9 +236,9 @@ class VaRAExtraProjectsIter():
                 return val
 
 
-def run_process_with_output(process: QProcess,
-                            post_out: tp.Callable[[str], None] = lambda x: None
-                           ) -> None:
+def run_process_with_output(
+        process: QProcess,
+        post_out: tp.Callable[[str], None] = lambda x: None) -> None:
     """
     Run a process and forward stdout to a post_out function.
     """
@@ -511,7 +511,7 @@ def get_current_branch(repo_folder: tp.Optional[Path]) -> str:
     """
     Get the current branch of a repository, e.g., HEAD.
     """
-    if repo_folder is None or repo_folder == '':
+    if repo_folder is None or repo_folder == Path(''):
         return tp.cast(str, git("rev-parse", "--abbrev-ref", "HEAD").strip())
 
     with local.cwd(repo_folder):
@@ -652,10 +652,10 @@ def set_cmake_var(var_name: str,
             lambda: run_process_with_output(proc, post_out))
 
 
-def init_vara_build(path_to_llvm: Path,
-                    build_type: BuildType,
-                    post_out: tp.Callable[[str], None] = lambda x: None
-                   ) -> None:
+def init_vara_build(
+        path_to_llvm: Path,
+        build_type: BuildType,
+        post_out: tp.Callable[[str], None] = lambda x: None) -> None:
     """
     Initialize a VaRA build config.
     """
@@ -672,15 +672,16 @@ def init_vara_build(path_to_llvm: Path,
             lambda: run_process_with_output(proc, post_out))
 
 
-def verify_build_structure(own_libgit: bool,
-                           include_phasar: bool,
-                           path_to_llvm: Path,
-                           post_out: tp.Callable[[str], None] = lambda x: None
-                          ) -> None:
+def verify_build_structure(own_libgit: bool, include_phasar: bool,
+                           path_to_llvm: Path) -> None:
     """
     Verify the build strucutre of VaRA:
         - ensure status of submodules
         - update submodules
+
+    Args:
+        own_libgit: ``True``, if own libgit should be self build
+        include_phasar: ``True``, if phasar should be included in build
     """
     if (not get_cmake_var("VARA_BUILD_LIBGIT") or not os.path.exists(
             path_to_llvm / "/tools/VaRA/external/libgit2/CMakeLists.txt")) \
@@ -713,11 +714,9 @@ def build_vara(path_to_llvm: Path,
             raise error
 
     with local.cwd(full_path):
-        verify_build_structure(own_libgit, include_phasar, path_to_llvm,
-                               post_out)
+        verify_build_structure(own_libgit, include_phasar, path_to_llvm)
 
-        set_vara_cmake_variables(own_libgit, include_phasar, install_prefix,
-                                 post_out)
+        set_vara_cmake_variables(install_prefix, post_out)
 
     with ProcessManager.create_process("ninja", ["install"],
                                        workdir=full_path) as proc:
@@ -726,11 +725,9 @@ def build_vara(path_to_llvm: Path,
             lambda: run_process_with_output(proc, post_out))
 
 
-def set_vara_cmake_variables(own_libgit: bool,
-                             include_phasar: bool,
-                             install_prefix: str,
-                             post_out: tp.Callable[[str], None] = lambda x: None
-                            ) -> None:
+def set_vara_cmake_variables(
+        install_prefix: str,
+        post_out: tp.Callable[[str], None] = lambda x: None) -> None:
     """
     Set all wanted/needed cmake flags.
     """
@@ -830,21 +827,21 @@ def get_vara_status(llvm_folder: Path) -> GitStatus:
 ###############################################################################
 
 
-class GitStateSignals(QObject):  # type: ignore
+class GitStateSignals(QObject):
     """
     GitStateSignals to send state update to the GUI.
     """
     status_update = pyqtSignal(object, object, object)
 
 
-class CheckStateSignal(QObject):  # type: ignore
+class CheckStateSignal(QObject):
     """
     This signal is emited when the state could have changed.
     """
     possible_state_change = pyqtSignal()
 
 
-class GitStateChecker(QRunnable):  # type: ignore
+class GitStateChecker(QRunnable):
     """
     GitStateChecker to fetch and verify the git status.
     """
@@ -855,7 +852,7 @@ class GitStateChecker(QRunnable):  # type: ignore
         self.path_to_llvm = path_to_llvm
         self.signals = state_signal
 
-    @pyqtSlot()  # type: ignore
+    @pyqtSlot()
     def run(self) -> None:
         """
         Retrieve status updates for llvm,clang, and VaRA
@@ -868,7 +865,7 @@ class GitStateChecker(QRunnable):  # type: ignore
         self.signals.status_update.emit(llvm_status, clang_status, vara_status)
 
 
-class PullWorker(QRunnable):  # type: ignore
+class PullWorker(QRunnable):
     """
     QtWorker to update repositories.
     """
@@ -878,7 +875,7 @@ class PullWorker(QRunnable):  # type: ignore
         self.llvm_folder = llvm_folder
         self.check_state = CheckStateSignal()
 
-    @pyqtSlot()  # type: ignore
+    @pyqtSlot()
     def run(self) -> None:
         """
         Pull changes and update the current branch.
@@ -890,14 +887,15 @@ class PullWorker(QRunnable):  # type: ignore
 
 
 class ProcessManager():
-    __instance = None
+    __instance: tp.Optional['ProcessManager'] = None
 
     @staticmethod
     @contextmanager
-    def create_process(program: str,
-                       args: tp.Optional[tp.List[str]] = None,
-                       workdir: tp.Optional[tp.Union[str, Path]] = None
-                      ) -> tp.Iterator[QProcess]:
+    def create_process(
+        program: str,
+        args: tp.Optional[tp.List[str]] = None,
+        workdir: tp.Optional[tp.Union[str, Path]] = None
+    ) -> tp.Iterator[QProcess]:
         """
         Creates a new process.
         The method does not return immediately. Instead it waits until the
@@ -930,7 +928,7 @@ class ProcessManager():
             raise ProcessTerminatedError()
 
     @staticmethod
-    def getInstance() -> 'ProcessManager':
+    def get_instance() -> 'ProcessManager':
         """Get access to the ProcessManager"""
         if ProcessManager.__instance is None:
             ProcessManager()
@@ -949,11 +947,13 @@ class ProcessManager():
         This method returns immediately and does not wait for the process
         to finish."""
         args = [] if args is None else args
-        ProcessManager.getInstance().__start_process(process, program, args)
+        # pylint: disable=protected-access
+        ProcessManager.get_instance().__start_process(process, program, args)
 
     @staticmethod
     def shutdown() -> None:
-        inst = ProcessManager.getInstance()
+        # pylint: disable=protected-access
+        inst = ProcessManager.get_instance()
         with inst.__mutex:
             inst.__shutdown()
             inst.__terminate_all_processes(block=False)
@@ -961,13 +961,14 @@ class ProcessManager():
     @staticmethod
     def terminate_all_processes(block: bool = False) -> None:
         """Terminates all running processes tracked by the ProcessManager."""
-        ProcessManager.getInstance().__terminate_all_processes(block)
+        # pylint: disable=protected-access
+        ProcessManager.get_instance().__terminate_all_processes(block)
 
     def __init__(self) -> None:
         if ProcessManager.__instance is not None:
             raise Exception("This class is a singleton!")
-        else:
-            ProcessManager.__instance = self
+
+        ProcessManager.__instance = self
 
         self.__has_shutdown = False
         self.__processes: tp.List[QProcess] = []
@@ -1013,7 +1014,9 @@ class VaRAStateManager():
     """
 
     def __init__(self, llvm_folder: Path) -> None:
-        # TODO path propertie needs check
+        if not llvm_folder.exists():
+            raise ValueError("llvm_folder path did not exist!")
+
         self.llvm_folder = llvm_folder
         self.state_signal = GitStateSignals()
 

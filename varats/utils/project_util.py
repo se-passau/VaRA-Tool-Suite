@@ -135,7 +135,6 @@ class AbstractRevisionBlocker(abc.ABC):
         Subclasses relying on complex functionality for determining their set
         of blocked revisions can use this method to initialize a cache.
         """
-        pass
 
 
 class BlockedRevision(AbstractRevisionBlocker):
@@ -299,11 +298,11 @@ def block_revisions(blocks: tp.List[AbstractRevisionBlocker]) -> tp.Any:
     ATTENTION: This decorator depends on things introduced by the
     @with_git decorator and therefore must be used above that decorator.
 
-    This adds a new static method `is_blocked_revision` that checks
+    This adds a new static method ``is_blocked_revision`` that checks
     whether a given revision id is marked as blocked.
 
     Args:
-        blocks: A list of `BlockedRevision`s and `BlockedRevisionRange`s.
+        blocks: A list of ``BlockedRevision``'s and ``BlockedRevisionRange``'s.
     """
 
     def revision_blocker_decorator(cls: tp.Any) -> tp.Any:
@@ -315,8 +314,8 @@ def block_revisions(blocks: tp.List[AbstractRevisionBlocker]) -> tp.Any:
             reason for the block if available.
             """
             # trigger caching for BlockedRevisionRanges
-            if not cls.__blocked_revisions_initialized:
-                cls.__blocked_revisions_initialized = True
+            if not cls.blocked_revisions_initialized:
+                cls.blocked_revisions_initialized = True
                 with local.cwd(get_local_project_git_path(cls.NAME)):
                     for block in blocks:
                         block.init_cache(cls.NAME)
@@ -327,7 +326,7 @@ def block_revisions(blocks: tp.List[AbstractRevisionBlocker]) -> tp.Any:
                         return True, b_entry.reason
             return False, None
 
-        cls.__blocked_revisions_initialized = False
+        cls.blocked_revisions_initialized = False
         cls.is_blocked_revision = is_blocked_revision_impl
         return cls
 

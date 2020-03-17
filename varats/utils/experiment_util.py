@@ -38,7 +38,7 @@ class FunctionPEErrorWrapper():
     def __call__(self, *args: tp.Any, **kwargs: tp.Any) -> tp.Any:
         try:
             return self.__func(*args, **kwargs)
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             self.__handler(ex)
 
 
@@ -86,12 +86,13 @@ class PEErrorHandler():
         with open(error_file, 'w') as outfile:
             if isinstance(ex, ProcessExecutionError):
                 if ex.retcode == 124:
-                    extra_error = """Command:
+                    cmd = str(self.__run_cmd)
+                    timeout_duration = str(self.__timeout_duration)
+                    extra_error = f"""Command:
 {cmd}
 Timeout after: {timeout_duration}
 
-""".format(cmd=str(self.__run_cmd),
-                    timeout_duration=str(self.__timeout_duration))
+"""
                     outfile.write(extra_error)
                     outfile.flush()
 
@@ -108,12 +109,13 @@ def get_default_compile_error_wrapped(project: Project,
     """
     Setup the default project compile function with an error handler.
     """
+    result_dir = str(CFG["vara"]["outfile"])
+    result_folder = result_folder_template.format(result_dir=result_dir,
+                                                  project_dir=str(project.name))
     return FunctionPEErrorWrapper(
         project.compile,
         PEErrorHandler(
-            result_folder_template.format(result_dir=str(
-                CFG["vara"]["outfile"]),
-                                          project_dir=str(project.name)),
+            result_folder,
             report_type.get_file_name(
                 project_name=str(project.name),
                 binary_name="all",
@@ -164,8 +166,7 @@ class VersionExperiment(Experiment):  # type: ignore
         fs_whitelist = V_CFG["experiment"]["file_status_whitelist"].value
 
         if fs_blacklist or fs_whitelist:
-            fs_good = {x for x in FileStatusExtension
-                      } if not fs_whitelist else set()
+            fs_good = set(FileStatusExtension) if not fs_whitelist else set()
 
             fs_good -= {
                 FileStatusExtension.get_file_status_from_str(x)
