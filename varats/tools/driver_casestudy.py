@@ -8,6 +8,7 @@ import re
 import typing as tp
 from argparse import ArgumentParser, ArgumentTypeError
 from pathlib import Path
+import subprocess
 
 from argparse_utils import enum_action
 
@@ -158,6 +159,26 @@ def main() -> None:
         help="Maximal expected gradient in percent between two revisions")
     add_common_args(ext_parser)
 
+    # vara-cs view
+    view_parser = sub_parsers.add_parser(
+        'view', help="View a file of one revision for the current case study")
+
+    view_parser.add_argument(
+        "report_name",
+        help=("Provide a report name to "
+              "select which files are considered you want to view"),
+        choices=MetaReport.REPORT_TYPES.keys(),
+        type=str,
+        default=".*")
+
+    view_parser.add_argument(
+        "commit_hash",
+        help=("Provide a commit hash to select which revisions are shown"),
+        # TODO get a list of commits per report, problem depends on report
+        # choices=get_processed_revisions(),
+        type=str,
+        default="*")
+
     # vara-cs package
     package_parser = sub_parsers.add_parser('package',
                                             help="Case study packaging util")
@@ -188,6 +209,8 @@ def main() -> None:
         __casestudy_create_or_extend(args, parser)
     elif args['subcommand'] == 'package':
         __casestudy_package(args, parser)
+    elif args['subcommand'] == 'view':
+        __casestudy_view(args, parser)
 
 
 def __casestudy_status(args: tp.Dict[str, tp.Any],
@@ -203,6 +226,20 @@ def __casestudy_status(args: tp.Dict[str, tp.Any],
                                     args['short'], args['sorted'],
                                     args['list_revs'], args['ws'],
                                     args['legend'])
+
+
+def __casestudy_view(args: tp.Dict[str, tp.Any],
+                     parser: ArgumentParser) -> None:
+
+    report_name = args['report_name']
+    commit_hash = args['commit_hash']
+    file_name = 'results/test.txt'
+    # TODO combine file name regex and get list of matches
+    # TODO get choice from user
+
+    editor = os.getenv('EDITOR', 'vi')
+    # TODO replace with plumbum call
+    subprocess.call(f"{editor} {file_name}", shell=True)
 
 
 def __casestudy_create_or_extend(args: tp.Dict[str, tp.Any],
