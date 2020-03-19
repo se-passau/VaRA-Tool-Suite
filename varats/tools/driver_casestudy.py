@@ -12,6 +12,9 @@ import subprocess
 
 from argparse_utils import enum_action
 
+from plumbum import FG
+from benchbuild.utils.cmd import find
+
 from varats.data.report import MetaReport
 from varats.paper import paper_config_manager as PCM
 from varats.paper.case_study import (SamplingMethod, ExtenderStrategy,
@@ -232,14 +235,20 @@ def __casestudy_view(args: tp.Dict[str, tp.Any],
                      parser: ArgumentParser) -> None:
 
     report_name = args['report_name']
-    commit_hash = args['commit_hash']
-    file_name = 'results/test.txt'
-    # TODO combine file name regex and get list of matches
-    # TODO get choice from user
 
-    editor = os.getenv('EDITOR', 'vi')
-    # TODO replace with plumbum call
-    subprocess.call(f"{editor} {file_name}", shell=True)
+    report = None  # TODO get report-object from name as string
+    matches = find(CFG["result_dir"], "-name",
+                   f"{report.SHORTHAND}-*-{args['commit_hash']}_success.{report.FILE_TYPE}")
+    if not matches:
+        parser.error("No result was found for this report and this revision.")
+    # TODO get choice from user, if there are multiple matches
+    file_name = f"{CFG['result_dir']}/test.txt"
+
+    # open the file in the default text editor or vi if none is set
+    editor_name = os.getenv('EDITOR', 'vi')
+    _tmp = __import__('benchbuild.utils.cmd', fromlist=[editor_name])
+    editor = getattr(_tmp, editor_name)
+    editor[file_name] & FG
 
 
 def __casestudy_create_or_extend(args: tp.Dict[str, tp.Any],
