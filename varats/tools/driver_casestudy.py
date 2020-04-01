@@ -234,15 +234,28 @@ def __casestudy_status(args: tp.Dict[str, tp.Any],
 def __casestudy_view(args: tp.Dict[str, tp.Any],
                      parser: ArgumentParser) -> None:
 
+    # TODO replace prints with parser or matching loggers
+
     report_name = args['report_name']
+    file_name = ""
 
     report = None  # TODO get report-object from name as string
     matches = find(CFG["result_dir"], "-name",
+                   # f"CR-*-{args['commit_hash']}_success.yaml").split()
                    f"{report.SHORTHAND}-*-{args['commit_hash']}_success.{report.FILE_TYPE}")
     if not matches:
         parser.error("No result was found for this report and this revision.")
-    # TODO get choice from user, if there are multiple matches
-    file_name = f"{CFG['result_dir']}/test.txt"
+    elif len(matches) == 1:
+        file_name = matches[0]
+    # TODO limit amount of results or warn if more than 10 matches
+    else:
+        print("There are multiple matches. Please choose one:")
+        for match in matches:
+            print(f"{matches.index(match) + 1}: {match}")
+        usr_input = ''
+        while usr_input not in range(1, len(matches) + 1, 1):
+            usr_input = int(input("Input: "))
+            file_name = matches[usr_input - 1]
 
     # open the file in the default text editor or vi if none is set
     editor_name = os.getenv('EDITOR', 'vi')
