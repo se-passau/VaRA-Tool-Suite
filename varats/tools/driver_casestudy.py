@@ -247,12 +247,18 @@ def __casestudy_view(args: tp.Dict[str, tp.Any],
         parser.error("No result was found for this report and this revision.")
     elif len(matches) == 1:
         file_name = matches[0]
-    # TODO limit amount of results or warn if more than 10 matches
     else:
-        print("There are multiple matches. Please choose one:")
+        usr_input = ''
+        if len(matches) > 10:
+            print(f"There are {len(matches)} matches. Display them all?")
+            usr_input = input("(y/n): ")
+            if(usr_input != "y"):
+                parser.exit()
+        else:
+            print("There are multiple matches.")
+        print("Please chose one by entering its index number:")
         for match in matches:
             print(f"{matches.index(match) + 1}: {match}")
-        usr_input = ''
         while usr_input not in range(1, len(matches) + 1, 1):
             usr_input = int(input("Input: "))
             file_name = matches[usr_input - 1]
