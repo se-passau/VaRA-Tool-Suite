@@ -8,7 +8,6 @@ import re
 import typing as tp
 from argparse import ArgumentParser, ArgumentTypeError
 from pathlib import Path
-import subprocess
 
 from argparse_utils import enum_action
 
@@ -172,7 +171,7 @@ def main() -> None:
               "select which files are considered you want to view"),
         choices=MetaReport.REPORT_TYPES.keys(),
         type=str,
-        default=".*")
+        default=None)
 
     view_parser.add_argument(
         "commit_hash",
@@ -233,13 +232,14 @@ def __casestudy_status(args: tp.Dict[str, tp.Any],
 
 def __casestudy_view(args: tp.Dict[str, tp.Any],
                      parser: ArgumentParser) -> None:
-
-    # TODO replace prints with parser or matching loggers
-
-    report_name = args['report_name']
+    # get used report class
+    report = None
+    report_types = MetaReport.REPORT_TYPES.values()
+    for report_type in report_types:
+        if report_type.__name__ == args['report_name']:
+            report = report_type
+    # determine file name
     file_name = ""
-
-    report = None  # TODO get report-object from name as string
     matches = find(CFG["result_dir"], "-name",
                    # f"CR-*-{args['commit_hash']}_success.yaml").split()
                    f"{report.SHORTHAND}-*-{args['commit_hash']}_success.{report.FILE_TYPE}")
