@@ -12,9 +12,9 @@ from pathlib import Path
 from argparse_utils import enum_action
 
 from plumbum import FG
-from benchbuild.utils.cmd import find
 
 from varats.data.report import MetaReport
+from varats.data.revisions import get_processed_revisions_files
 from varats.paper import paper_config_manager as PCM
 from varats.paper.case_study import (SamplingMethod, ExtenderStrategy,
                                      ReleaseType, load_case_study_from_file,
@@ -176,10 +176,12 @@ def main() -> None:
     view_parser.add_argument(
         "commit_hash",
         help=("Provide a commit hash to select which revisions are shown"),
-        # TODO get a list of commits per report, problem depends on report
-        # choices=get_processed_revisions(),
         type=str,
         default="*")
+    view_parser.add_argument("-p",
+                             "--project",
+                             help="Project name",
+                             default=None)
 
     # vara-cs package
     package_parser = sub_parsers.add_parser('package',
@@ -240,12 +242,17 @@ def __casestudy_view(args: tp.Dict[str, tp.Any],
             report = report_type
     # determine file name
     file_name = ""
-    matches = find(CFG["result_dir"], "-name",
-                   # f"CR-*-{args['commit_hash']}_success.yaml").split()
-                   f"{report.SHORTHAND}-*-{args['commit_hash']}_success.{report.FILE_TYPE}")
+    matches = []
+    project_version = args['commit_hash']
+    if "project" in args:
+        matches = get_processed_revisions_files(args["project"], report)
+    else:
+        # TODO search all projects by commit hash revision
+        pass
     if not matches:
         parser.error("No result was found for this report and this revision.")
-    elif len(matches) == 1:
+    # TODO filter matches regarding project version
+    if len(matches) == 1:
         file_name = matches[0]
     else:
         usr_input = ''
