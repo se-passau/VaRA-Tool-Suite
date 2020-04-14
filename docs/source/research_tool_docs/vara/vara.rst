@@ -22,6 +22,9 @@ Documentation
 
    setup
    debugging
+   region_annotation
+   region_detection
+   reports
    passes
 
 VaRA API Reference
