@@ -25,6 +25,7 @@ Documentation
    region_annotation
    region_detection
    reports
+   support_passes
    passes
 
 VaRA API Reference
