@@ -29,7 +29,7 @@ from varats.data.revisions import (
 )
 from varats.jupyterhelper.file import load_blame_report
 from varats.paper.case_study import CaseStudy, get_case_study_file_name_filter
-from varats.utils.git_util import calc_code_churn_range, ChurnConfig
+from varats.utils.git_util import calc_diff_code_churn, ChurnConfig
 from varats.utils.project_util import get_local_project_git
 
 
@@ -92,15 +92,9 @@ class BlameDiffMetricsDatabase(
             diff_between_head_pred = BlameReportDiff(head_report, pred_report)
 
             # Calculate the total churn between pred and base commit
-            code_churn = calc_code_churn_range(
+            total_churn_values = calc_diff_code_churn(
                 repo, ChurnConfig.create_c_style_languages_config(),
                 pred_report.head_commit, commit
-            )
-            total_churn = reduce(
-                lambda x, y: x + y, [
-                    churn_rev[1] + churn_rev[2]
-                    for churn_rev in code_churn.values()
-                ]
             )
 
             def weighted_avg(tuples: tp.List[tp.Tuple[int, int]]) -> float:
@@ -122,7 +116,7 @@ class BlameDiffMetricsDatabase(
                     'revision':
                         head_report.head_commit,
                     'churn':
-                        total_churn,
+                        total_churn_values[1] + total_churn_values[2],
                     'num_interactions':
                         count_interactions(diff_between_head_pred),
                     'num_interacting_commits':

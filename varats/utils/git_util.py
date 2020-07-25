@@ -3,6 +3,7 @@
 import re
 import typing as tp
 from enum import Enum
+from functools import reduce
 
 import pygit2
 from benchbuild.utils.cmd import git
@@ -310,6 +311,44 @@ def calc_commit_code_churn(
     churn_config = ChurnConfig.init_as_default_if_none(churn_config)
     return calc_code_churn_range(repo, churn_config, commit,
                                  commit)[str(commit.id)]
+
+
+def calc_diff_code_churn(
+    repo: tp.Union[pygit2.Repository, str],
+    churn_config: tp.Optional[ChurnConfig] = None,
+    start_commit: tp.Optional[tp.Union[pygit2.Commit, str]] = None,
+    end_commit: tp.Optional[tp.Union[pygit2.Commit, str]] = None
+) -> tp.Tuple[int, int, int]:
+    """
+    Calculates code churn of a diff between two commits, i.e., the summ of all
+    changes from `start` to `end`. As in a diff, the churn of the `start` commit
+    is excluded where the `end` commits churn is included.
+
+    Args:
+        repo: git repository
+        churn_config: churn config to customize churn generation
+        start_commit: base commit, similar to a base for a diff
+        end_commit: last/current commit, marking the end of the range/diff
+
+    Returns:
+        dict of churn triples, where the commit hash points to
+        (files changed, insertions, deletions)
+    """
+    churn_config = ChurnConfig.init_as_default_if_none(churn_config)
+    start_commit_hash = start_commit.id if isinstance(
+        start_commit, pygit2.Commit
+    ) else start_commit
+
+    code_churn = calc_code_churn_range(
+        repo, churn_config, start_commit, end_commit
+    )
+    # exclude start_commit from churn
+    code_churn.pop(start_commit_hash, None)
+
+    return reduce(
+        lambda x, y: (x[0] + y[0], x[1] + y[1], x[2] + y[2]),
+        code_churn.values(), (0, 0, 0)
+    )
 
 
 def calc_repo_code_churn(
