@@ -63,6 +63,9 @@ def generate_benchbuild_config(
     projects_conf.value[:] += ['varats.projects.test_projects.basic_tests']
     projects_conf.value[:] += ['varats.projects.test_projects.linker_check']
     projects_conf.value[:] += ['varats.projects.test_projects.taint_tests']
+    projects_conf.value[:] += [
+        'varats.projects.test_projects.blame_snalysis_scenarios'
+    ]
 
     # Experiments for VaRA
     projects_conf = new_bb_cfg["plugins"]["experiments"]

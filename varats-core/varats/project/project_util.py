@@ -227,3 +227,10 @@ class VaraTestRepoSource(Git):  # type: ignore
             )
 
         return tgt_path
+
+
+class LocalGit(Git):
+    """A git source that does not clone."""
+
+    def fetch(self) -> pb.LocalPath:
+        return local.path(target_prefix()) / self.local
