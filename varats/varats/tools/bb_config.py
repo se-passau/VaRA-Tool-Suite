@@ -53,6 +53,7 @@ def generate_benchbuild_config(
         'varats.projects.c_projects.qemu',
         'varats.projects.c_projects.redis',
         'varats.projects.c_projects.tmux',
+        'varats.projects.c_projects.svf',
         'varats.projects.c_projects.vim',
         'varats.projects.c_projects.x264',
         'varats.projects.c_projects.xz',
@@ -80,6 +81,7 @@ def generate_benchbuild_config(
         'varats.experiments.vara.vara_full_mtfa',
         'varats.experiments.vara.blame_verifier_experiment',
         'varats.experiments.phasar.ide_linear_constant_experiment',
+        'varats.experiments.phasar.points_to_analysis_experiment',
     ]
 
     # Slurm Cluster Configuration
