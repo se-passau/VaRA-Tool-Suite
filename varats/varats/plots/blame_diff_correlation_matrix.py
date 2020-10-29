@@ -23,6 +23,8 @@ from varats.mapping.commit_map import CommitMap, get_commit_map
 from varats.paper_mgmt.paper_config import get_loaded_paper_config
 from varats.plot.plot import Plot, PlotDataEmpty
 from varats.plot.plot_utils import align_yaxis, pad_axes
+from varats.project.project_util import get_project_cls_by_name
+from varats.provider.bug.bug_provider import BugProvider
 
 LOG = logging.getLogger(__name__)
 
@@ -177,6 +179,26 @@ def log_interesting_revisions(
         LOG.info(f"  {rev} ({x_var}={item[x_var]}, {y_var}={item[y_var]})")
 
 
+def _get_bug_data(project_name: str, revisions: tp.List[str]) -> pd.DataFrame:
+    bug_provider = BugProvider.get_provider_for_project(
+        get_project_cls_by_name(project_name)
+    )
+    bugs = bug_provider.find_all_raw_bugs()
+    bug_introducers: tp.Set[str] = {
+        rev for bug in bugs for rev in bug.introducing_commits
+    }
+    bug_fixers: tp.Set[str] = {bug.fixing_commit for bug in bugs}
+    is_bug_introducer = [
+        1 if rev in bug_introducers else 0 for rev in revisions
+    ]
+    is_bug_fixer = [1 if rev in bug_fixers else 0 for rev in revisions]
+    return pd.DataFrame({
+        'bug_introducer': is_bug_introducer,
+        'bug_fixer': is_bug_fixer
+    },
+                        index=revisions)
+
+
 class BlameDiffCorrelationMatrix(Plot):
     """Draws a scatter-plot matrix for blame-data metrics, comparing the
     different independent and dependent variables."""
@@ -209,6 +231,10 @@ class BlameDiffCorrelationMatrix(Plot):
         if df.empty or len(df.index) < 2:
             raise PlotDataEmpty
         df.sort_values(by=['time_id'], inplace=True)
+
+        # mark bug introducing commits
+        df = df.join(_get_bug_data(project_name, df.index.to_list()))
+        variables.append('bug_fixer')
 
         if LOG.isEnabledFor(logging.INFO):
             for x_var in variables:
