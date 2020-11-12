@@ -185,9 +185,9 @@ def _get_bug_data(project_name: str, revisions: tp.List[str]) -> pd.DataFrame:
     )
     bugs = bug_provider.find_all_raw_bugs()
     bug_introducers: tp.Set[str] = {
-        rev for bug in bugs for rev in bug.introducing_commits
+        rev[:10] for bug in bugs for rev in bug.introducing_commits
     }
-    bug_fixers: tp.Set[str] = {bug.fixing_commit for bug in bugs}
+    bug_fixers: tp.Set[str] = {bug.fixing_commit[:10] for bug in bugs}
     is_bug_introducer = [
         1 if rev in bug_introducers else 0 for rev in revisions
     ]
