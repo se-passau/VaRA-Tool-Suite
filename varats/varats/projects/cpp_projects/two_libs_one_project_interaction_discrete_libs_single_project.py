@@ -2,10 +2,10 @@
 TwoLibsOneProjectInteractionDiscreteLibsSingleProject library analysis
 repository."""
 import typing as tp
-from pathlib import Path
 
 import benchbuild as bb
-from benchbuild.utils.cmd import cmake, cp, git, make, mkdir
+from benchbuild.environments.domain.declarative import ContainerImage
+from benchbuild.utils.cmd import cmake, make, mkdir
 from benchbuild.utils.settings import get_number_of_jobs
 from plumbum import local
 
@@ -15,6 +15,7 @@ from varats.project.project_util import (
     ProjectBinaryWrapper,
     wrap_paths_to_binaries,
     BinaryType,
+    VaraTestRepoSubmodule,
 )
 from varats.utils.settings import bb_cfg
 
@@ -28,6 +29,8 @@ class TwoLibsOneProjectInteractionDiscreteLibsSingleProject(
     NAME = 'TwoLibsOneProjectInteractionDiscreteLibsSingleProject'
     GROUP = 'cpp_projects'
     DOMAIN = 'library-testproject'
+    CONTAINER = ContainerImage()
+
     SOURCE = [
         VaraTestRepoSource(
             remote="LibraryAnalysisRepos"
@@ -36,7 +39,30 @@ class TwoLibsOneProjectInteractionDiscreteLibsSingleProject(
             local="TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
             "/Elementalist",
             refspec="HEAD",
-            limit=None,
+            shallow=False,
+            version_filter=project_filter_generator(
+                "TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
+            )
+        ),
+        VaraTestRepoSubmodule(
+            remote="LibraryAnalysisRepos"
+            "/TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
+            "/fire_lib",
+            local="TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
+            "/fire_lib",
+            refspec="HEAD",
+            shallow=False,
+            version_filter=project_filter_generator(
+                "TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
+            )
+        ),
+        VaraTestRepoSubmodule(
+            remote="LibraryAnalysisRepos"
+            "/TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
+            "/water_lib",
+            local="TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
+            "/water_lib",
+            refspec="HEAD",
             shallow=False,
             version_filter=project_filter_generator(
                 "TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
@@ -64,20 +90,6 @@ class TwoLibsOneProjectInteractionDiscreteLibsSingleProject(
         c_compiler = bb.compiler.cc(self)  # type: ignore
         cxx_compiler = bb.compiler.cxx(self)  # type: ignore
         mkdir(version_source / "build")
-
-        # As long as multiple VaraTestRepoSources are not working, one has to
-        # ensure that the necessary libs are located as git repositories in the
-        # benchbuild/tmp dir
-
-        path_to_libs_in_tmp = Path(bb_cfg()["tmp_dir"].value)
-        path_to_root_dir = version_source / "../"
-
-        cp("-r", path_to_libs_in_tmp / "fire_lib", path_to_root_dir)
-        cp("-r", path_to_libs_in_tmp / "water_lib", path_to_root_dir)
-
-        with local.cwd(version_source):
-            git("submodule", "sync")
-            git("submodule", "update")
 
         with local.cwd(version_source / "build"):
             with local.env(CC=str(c_compiler), CXX=str(cxx_compiler)):
