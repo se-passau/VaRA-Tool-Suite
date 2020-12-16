@@ -1,4 +1,4 @@
-"""Example project demonstrating how to use a repo from the vara-test-repos."""
+"""Scenario Calculator."""
 import typing as tp
 
 import benchbuild as bb
@@ -11,23 +11,22 @@ from varats.project.project_util import (
     ProjectBinaryWrapper,
     wrap_paths_to_binaries,
     BinaryType,
-    LocalGit,
+    VaraTestRepoSource,
 )
 from varats.utils.settings import bb_cfg
 
 
-class BlameAnalysisScenarios(bb.Project):  # type: ignore
-    """Example project demonstrating how to use a repo from the vara-test-
-    repos."""
+class Calculator(bb.Project):  # type: ignore
+    """Scenario Calculator."""
 
-    NAME = 'ba_scenarios'
+    NAME = 'calculator'
     DOMAIN = 'testing'
     GROUP = 'test_projects'
 
     SOURCE = [
-        LocalGit(
-            remote="/dev/null",
-            local="BlameAnalysisScenarios",
+        VaraTestRepoSource(
+            remote="BlameAnalysisRepos/Scenarios/Calculator",
+            local="Calculator",
             refspec="HEAD",
             limit=None,
             version_filter=project_filter_generator(NAME)
@@ -42,7 +41,7 @@ class BlameAnalysisScenarios(bb.Project):  # type: ignore
         pass
 
     def compile(self) -> None:
-        """Compile the example project."""
+        """Compile the project."""
         source = local.path(self.source_of_primary)
 
         clang = bb.compiler.cxx(self)  # type: ignore

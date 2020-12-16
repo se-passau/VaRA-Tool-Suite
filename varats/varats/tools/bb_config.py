@@ -67,7 +67,11 @@ def generate_benchbuild_config(
     projects_conf.value[:] += ['varats.projects.test_projects.linker_check']
     projects_conf.value[:] += ['varats.projects.test_projects.taint_tests']
     projects_conf.value[:] += [
-        'varats.projects.test_projects.blame_snalysis_scenarios'
+        'varats.projects.test_projects.ba_scenarios.calculator'
+        'varats.projects.test_projects.ba_scenarios.central_code'
+        'varats.projects.test_projects.ba_scenarios.many_authors'
+        'varats.projects.test_projects.ba_scenarios.nested_calls'
+        'varats.projects.test_projects.ba_scenarios.single_author'
     ]
 
     # Experiments for VaRA
