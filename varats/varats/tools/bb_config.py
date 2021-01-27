@@ -40,6 +40,7 @@ def generate_benchbuild_config(
         'varats.projects.c_projects.gzip',
         'varats.projects.c_projects.htop',
         'varats.projects.c_projects.irssi',
+        'varats.projects.c_projects.libjpeg_turbo',
         'varats.projects.c_projects.libpng',
         'varats.projects.c_projects.libssh',
         'varats.projects.c_projects.libtiff',
@@ -88,6 +89,9 @@ def generate_benchbuild_config(
         'varats.experiments.vara.blame_verifier_experiment',
         'varats.experiments.phasar.ide_linear_constant_experiment',
     ]
+
+    # Enable version exploration by default
+    new_bb_cfg["versions"]["full"] = True
 
     # Slurm Cluster Configuration
     new_bb_cfg["slurm"]["account"] = "anywhere"

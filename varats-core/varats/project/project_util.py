@@ -1,4 +1,5 @@
 """Utility module for BenchBuild project handling."""
+import logging
 import os
 import typing as tp
 from distutils.dir_util import copy_tree
@@ -13,10 +14,10 @@ from benchbuild.source.base import target_prefix
 from benchbuild.utils.cmd import git, mkdir, cp
 from plumbum import local
 
+LOG = logging.getLogger(__name__)
 
-def get_project_cls_by_name(
-    project_name: str
-) -> tp.Type[bb.Project]:  # type: ignore
+
+def get_project_cls_by_name(project_name: str) -> tp.Type[bb.Project]:
     """Look up a BenchBuild project by it's name."""
     for proj in bb.project.ProjectRegistry.projects:
         if proj.endswith('gentoo') or proj.endswith("benchbuild"):
@@ -24,7 +25,7 @@ def get_project_cls_by_name(
             continue
 
         if proj.startswith(project_name):
-            project: tp.Type[bb.Project  # type: ignore
+            project: tp.Type[bb.Project
                             ] = bb.project.ProjectRegistry.projects[proj]
             return project
 
@@ -198,14 +199,18 @@ class ProjectBinaryWrapper():
 
     @property
     def name(self) -> str:
+        """Name of the binary."""
         return self.__binary_name
 
     @property
     def path(self) -> Path:
+        """Path to the binary location."""
         return self.__binary_path
 
     @property
     def type(self) -> BinaryType:
+        """Specifies the type, e.g., executable, shared, or static library, of
+        the binary."""
         return self.__type
 
     def __str__(self) -> str:
@@ -238,7 +243,8 @@ def wrap_paths_to_binaries(
     binaries: tp.List[tp.Tuple[str, BinaryType]]
 ) -> tp.List[ProjectBinaryWrapper]:
     """
-    Generates a wrapper for project binaries.
+    Generates a wrapper for project binaries, automatically infering the binary
+    name.
 
     >>> wrap_paths_to_binaries([("src/foo", BinaryType.executable)])
     [(foo: src/foo | executable)]
@@ -267,6 +273,10 @@ def copy_renamed_git_to_dest(src_dir: Path, dest_dir: Path) -> None:
         dest_dir: path to the destination directory
     """
     if os.path.isdir(dest_dir):
+        LOG.error(
+            "The passed destination directory already exists. "
+            "Copy/rename actions are skipped."
+        )
         return
     copy_tree(str(src_dir), str(dest_dir))
 
@@ -293,13 +303,16 @@ def copy_renamed_git_to_dest(src_dir: Path, dest_dir: Path) -> None:
                 os.rename(os.path.join(root, name), os.path.join(root, ".git"))
 
 
-class VaraTestRepoSubmodule(GitSubmodule):
+# TODO (se-passau/VaRA#717): Remove pylint's disable when issue is fixed
+class VaraTestRepoSubmodule(GitSubmodule):  # type: ignore  # pylint: disable=R0901;
     """A project source for submodule repositories stored in the vara-test-repos
     repository."""
 
     __vara_test_repos_git = Git(
         remote="https://github.com/se-passau/vara-test-repos",
         local="vara_test_repos",
+        refspec="HEAD",
+        limit=1
     )
 
     def fetch(self) -> pb.LocalPath:
@@ -307,6 +320,8 @@ class VaraTestRepoSubmodule(GitSubmodule):
         Overrides ``GitSubmodule`` s fetch to
           1. fetch the vara-test-repos repo
           2. extract the specified submodule from the vara-test-repos repo
+          3. rename files that were made git_storable (e.g., .gitted) back to
+             their original name (e.g., .git)
 
         Returns:
             the path where the inner repo is extracted to
@@ -319,7 +334,8 @@ class VaraTestRepoSubmodule(GitSubmodule):
         submodule_target = local.path(target_prefix()) / Path(self.local)
 
         # Extract submodule
-        copy_renamed_git_to_dest(submodule_path, submodule_target)
+        if not os.path.isdir(submodule_target):
+            copy_renamed_git_to_dest(submodule_path, submodule_target)
 
         return submodule_target
 
@@ -331,6 +347,8 @@ class VaraTestRepoSource(Git):  # type: ignore
     __vara_test_repos_git = Git(
         remote="https://github.com/se-passau/vara-test-repos",
         local="vara_test_repos",
+        refspec="HEAD",
+        limit=1
     )
 
     def fetch(self) -> pb.LocalPath:
@@ -338,6 +356,8 @@ class VaraTestRepoSource(Git):  # type: ignore
         Overrides ``Git`` s fetch to
           1. fetch the vara-test-repos repo
           2. extract the specified repo from the vara-test-repos repo
+          3. rename files that were made git_storable (e.g., .gitted) back to
+             their original name (e.g., .git)
 
         Returns:
             the path where the inner repo is extracted to
@@ -349,8 +369,9 @@ class VaraTestRepoSource(Git):  # type: ignore
         main_src_path = vara_test_repos_path / self.remote
         main_tgt_path = local.path(target_prefix()) / self.local
 
-        # Extract main repo
-        copy_renamed_git_to_dest(main_src_path, main_tgt_path)
+        # Extract main repository
+        if not os.path.isdir(main_tgt_path):
+            copy_renamed_git_to_dest(main_src_path, main_tgt_path)
 
         return main_tgt_path
 
@@ -367,6 +388,12 @@ class VaraTestRepoSource(Git):  # type: ignore
 
         # Extract main repository
         cp("-r", main_repo_src_local + "/.", tgt_loc)
+
+        # Skip submodule extraction if none exist
+        if not Path(tgt_loc / ".gitmodules").exists():
+            with pb.local.cwd(tgt_loc):
+                git("checkout", "--detach", version)
+            return tgt_loc
 
         # Extract submodules
         with pb.local.cwd(tgt_loc):

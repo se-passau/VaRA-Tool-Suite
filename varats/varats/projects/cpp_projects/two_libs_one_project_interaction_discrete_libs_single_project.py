@@ -4,7 +4,6 @@ repository."""
 import typing as tp
 
 import benchbuild as bb
-from benchbuild.environments.domain.declarative import ContainerImage
 from benchbuild.utils.cmd import cmake, make, mkdir
 from benchbuild.utils.settings import get_number_of_jobs
 from plumbum import local
@@ -29,7 +28,6 @@ class TwoLibsOneProjectInteractionDiscreteLibsSingleProject(
     NAME = 'TwoLibsOneProjectInteractionDiscreteLibsSingleProject'
     GROUP = 'cpp_projects'
     DOMAIN = 'library-testproject'
-    CONTAINER = ContainerImage()
 
     SOURCE = [
         VaraTestRepoSource(
@@ -39,6 +37,7 @@ class TwoLibsOneProjectInteractionDiscreteLibsSingleProject(
             local="TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
             "/Elementalist",
             refspec="HEAD",
+            limit=None,
             shallow=False,
             version_filter=project_filter_generator(
                 "TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
@@ -51,6 +50,7 @@ class TwoLibsOneProjectInteractionDiscreteLibsSingleProject(
             local="TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
             "/fire_lib",
             refspec="HEAD",
+            limit=None,
             shallow=False,
             version_filter=project_filter_generator(
                 "TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
@@ -63,6 +63,7 @@ class TwoLibsOneProjectInteractionDiscreteLibsSingleProject(
             local="TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
             "/water_lib",
             refspec="HEAD",
+            limit=None,
             shallow=False,
             version_filter=project_filter_generator(
                 "TwoLibsOneProjectInteractionDiscreteLibsSingleProject"
@@ -87,11 +88,11 @@ class TwoLibsOneProjectInteractionDiscreteLibsSingleProject(
         """Contains instructions on how to build the project."""
 
         version_source = local.path(self.source_of_primary)
-        c_compiler = bb.compiler.cc(self)  # type: ignore
-        cxx_compiler = bb.compiler.cxx(self)  # type: ignore
+        c_compiler = bb.compiler.cc(self)
+        cxx_compiler = bb.compiler.cxx(self)
         mkdir(version_source / "build")
 
         with local.cwd(version_source / "build"):
             with local.env(CC=str(c_compiler), CXX=str(cxx_compiler)):
-                bb.watch(cmake)("-G", "Unix Makefiles", "..")  # type: ignore
-            bb.watch(make)("-j", get_number_of_jobs(bb_cfg()))  # type: ignore
+                bb.watch(cmake)("-G", "Unix Makefiles", "..")
+            bb.watch(make)("-j", get_number_of_jobs(bb_cfg()))

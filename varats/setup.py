@@ -23,11 +23,11 @@ setup(
     install_requires=[
         "PyQt5>=5.10.0,<5.14.0",
         "PyQt5-stubs>=5.10.0,<5.14.0",
-        "PyYAML>=3.12",
+        "PyYAML>=5.1",
         "seaborn>=0.8.0",
         "matplotlib>=3.1.2",
         "pandas>=0.22.0",
-        "benchbuild>=5.3.1",
+        "benchbuild>=6.0.1",
         "plumbum>=1.6.6",
         "wllvm>=1.1.4",
         "argparse-utils>=1.2.0",
