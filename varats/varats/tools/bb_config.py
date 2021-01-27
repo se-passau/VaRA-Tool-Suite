@@ -73,6 +73,8 @@ def generate_benchbuild_config(
         'varats.projects.test_projects.ba_scenarios.many_authors'
         'varats.projects.test_projects.ba_scenarios.nested_calls'
         'varats.projects.test_projects.ba_scenarios.single_author'
+        'varats.projects.test_projects.ba_scenarios.szz_base'
+        'varats.projects.test_projects.ba_scenarios.szz_fail'
     ]
 
     # Experiments for VaRA
